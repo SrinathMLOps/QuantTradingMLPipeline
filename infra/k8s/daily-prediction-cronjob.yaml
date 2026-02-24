@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-prediction
+spec:
+  schedule: "0 0 * * *"  # Every day at midnight UTC
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: daily-prediction
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: prediction
+            image: YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/quant-trading-api:latest
+            command: ["python", "scripts/daily_prediction.py"]
+            env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            - name: BINANCE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-api
+                  key: api-key
+                  optional: true
+            - name: BINANCE_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: binance-api
+                  key: api-secret
+                  optional: true
+            resources:
+              requests:
+                memory: "512Mi"
+                cpu: "250m"
+              limits:
+                memory: "1Gi"
+                cpu: "500m"
+            volumeMounts:
+            - name: predictions
+              mountPath: /app/predictions
+          volumes:
+          - name: predictions
+            persistentVolumeClaim:
+              claimName: predictions-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: predictions-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

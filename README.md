@@ -93,8 +93,14 @@ See [Quant Hedge Fund Architecture](docs/quant-hedge-fund-architecture.md) for d
 
 ## 🚀 Features
 
+### Live Data & Predictions
+- **Real-time data ingestion** from Binance API
+- **Tomorrow's price prediction** - 24-hour ahead forecasting
+- **Trading signals** - BUY/SELL/HOLD with confidence scores
+- **Multi-asset support** - BTC, ETH, BNB, SOL, ADA, and more
+- **Automated daily predictions** - Scheduled via Kubernetes CronJob
+
 ### Data & Features
-- Real-time crypto data ingestion from Binance API
 - 30+ technical indicators (RSI, MACD, Bollinger Bands, ATR)
 - Lag features and rolling statistics
 - Time-based features (hour, day of week)
@@ -115,7 +121,7 @@ See [Quant Hedge Fund Architecture](docs/quant-hedge-fund-architecture.md) for d
 - **Visualizations**: Equity curve, drawdown, returns distribution
 
 ### Production Deployment
-- FastAPI inference service with health checks
+- FastAPI inference service with live predictions
 - Kubernetes deployment with HPA (2-10 replicas)
 - Model drift detection (PSI, KS test)
 - Prometheus metrics and Grafana dashboards
@@ -123,6 +129,46 @@ See [Quant Hedge Fund Architecture](docs/quant-hedge-fund-architecture.md) for d
 - Amazon Q integration for AI-powered development
 
 ## 📈 Quick Start
+
+### Live Price Prediction (New!)
+
+```bash
+# Start API server
+uvicorn src.api.main:app --reload
+
+# Predict tomorrow's BTC price
+curl -X POST "http://localhost:8000/predict/live" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "BTCUSDT"}'
+
+# Get trading signal
+curl -X POST "http://localhost:8000/signal" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "BTCUSDT", "threshold": 0.02}'
+
+# Predict multiple symbols
+curl -X POST "http://localhost:8000/predict/multi" \
+  -H "Content-Type: application/json" \
+  -d '{"symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"]}'
+```
+
+**Python Usage:**
+```python
+from api.predict import LivePricePredictor
+
+predictor = LivePricePredictor()
+
+# Predict tomorrow's price
+prediction = predictor.predict_tomorrow("BTCUSDT")
+print(f"Current: ${prediction['current_price']:,.2f}")
+print(f"Predicted: ${prediction['predicted_price']:,.2f}")
+print(f"Return: {prediction['predicted_return_pct']:+.2f}%")
+
+# Get trading signal
+signal = predictor.get_trading_signal("BTCUSDT")
+print(f"Action: {signal['action']}")
+print(f"Position Size: {signal['position_size']:.1%}")
+```
 
 ### Local Development (5 minutes)
 
@@ -143,6 +189,7 @@ python src/main.py
 # View results
 # MLflow UI: http://localhost:5000
 # Grafana: http://localhost:3000
+# API Docs: http://localhost:8000/docs
 ```
 
 ### Deploy to AWS EKS
@@ -165,6 +212,7 @@ kubectl apply -f infra/k8s/
 ## 📚 Documentation
 
 - **[Getting Started](docs/GETTING-STARTED.md)** - Quick start guide
+- **[Live Prediction Guide](docs/live-prediction-guide.md)** - Real-time price predictions (NEW!)
 - **[Architecture](docs/architecture.md)** - System design and data flow
 - **[Quant Hedge Fund Architecture](docs/quant-hedge-fund-architecture.md)** - Professional quant perspective
 - **[AWS Deployment](docs/aws-deployment.md)** - AWS setup and deployment
