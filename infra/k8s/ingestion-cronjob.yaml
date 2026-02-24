@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingestion
+spec:
+  schedule: "0 * * * *"  # Every hour
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: ingestion
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: ingestion
+            image: YOUR_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/quant-trading-ingestion:latest
+            env:
+            - name: BINANCE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: binance-api
+                  key: api-key
+            - name: BINANCE_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: binance-api
+                  key: api-secret
+            - name: AWS_DEFAULT_REGION
+              value: "us-east-1"
+            resources:
+              requests:
+                memory: "256Mi"
+                cpu: "100m"
+              limits:
+                memory: "512Mi"
+                cpu: "200m"

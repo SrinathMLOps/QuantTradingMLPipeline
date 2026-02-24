@@ -1,0 +1,122 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: Run tests
+        run: pytest tests/ --cov=src --cov-report=xml
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install linters
+        run: pip install black flake8 mypy
+      
+      - name: Run black
+        run: black --check src/ tests/
+      
+      - name: Run flake8
+        run: flake8 src/ tests/
+      
+      - name: Run mypy
+        run: mypy src/ || true
+
+  build-and-push:
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service: [ingestion, training, api]
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
+          docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
+      
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ env.ECR_REGISTRY }}/quant-trading-${{ matrix.service }}:$IMAGE_TAG \
+            -f docker/Dockerfile.${{ matrix.service }} .
+          docker push ${{ env.ECR_REGISTRY }}/quant-trading-${{ matrix.service }}:$IMAGE_TAG
+          
+          docker tag ${{ env.ECR_REGISTRY }}/quant-trading-${{ matrix.service }}:$IMAGE_TAG \
+            ${{ env.ECR_REGISTRY }}/quant-trading-${{ matrix.service }}:latest
+          docker push ${{ env.ECR_REGISTRY }}/quant-trading-${{ matrix.service }}:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name quant-trading-cluster --region ${{ env.AWS_REGION }}
+      
+      - name: Deploy to EKS
+        run: |
+          kubectl set image deployment/api \
+            api=${{ env.ECR_REGISTRY }}/quant-trading-api:${{ github.sha }}
+          kubectl set image deployment/training \
+            training=${{ env.ECR_REGISTRY }}/quant-trading-training:${{ github.sha }}
+          kubectl set image cronjob/ingestion \
+            ingestion=${{ env.ECR_REGISTRY }}/quant-trading-ingestion:${{ github.sha }}
+      
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api
+          kubectl rollout status deployment/training
