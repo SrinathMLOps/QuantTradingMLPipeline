@@ -4,6 +4,17 @@
 
 This is a production-grade quantitative trading ML pipeline for cryptocurrency forecasting, deployed on AWS EKS with full MLOps capabilities.
 
+**Key Features:**
+- Real-time data ingestion from Binance API
+- Advanced feature engineering with 30+ technical indicators
+- XGBoost forecasting with MLflow experiment tracking
+- Professional backtesting with transaction costs and risk controls
+- Comprehensive risk metrics (Sharpe, Sortino, Max Drawdown, VaR, CVaR)
+- Position sizing and risk management
+- Model drift detection and monitoring
+- FastAPI inference service with autoscaling
+- Amazon Q integration for AI-powered development
+
 ## Architecture Diagram
 
 ```
